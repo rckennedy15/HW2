@@ -1,4 +1,8 @@
 package edu.umb.cs443.hw2
+/*
+* Known Bug: app will crash if attempting to click to move position before it has finished moving
+* from the last position because it tries to create two threads which both move it at the same time
+*/
 
 import android.app.Activity
 import android.widget.GridView
@@ -6,6 +10,7 @@ import android.os.Bundle
 import android.util.Log
 import android.view.View
 import android.widget.ArrayAdapter
+import android.widget.TextView
 import android.widget.Toast
 import java.util.*
 import kotlinx.coroutines.*
@@ -16,7 +21,10 @@ private const val TAG = "MainActivity"
 class MainActivity : Activity() {
     private lateinit var gridView: GridView
     private val r = Random()
-    private var lastPosition = 0;
+    private var lastPosition = 0
+    private var cellCount = 0
+    private var treasureCount = 0
+
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -30,12 +38,12 @@ class MainActivity : Activity() {
         init()
 
         gridView.setOnItemClickListener { parent, v, position, id ->
-            // toast the position
-            Toast.makeText(
-                applicationContext,
-                position.toString() as CharSequence,
-                Toast.LENGTH_SHORT
-            ).show()
+//            Toast.makeText(
+//                applicationContext,
+//                position.toString() as CharSequence,
+//                Toast.LENGTH_SHORT
+//            ).show()
+
             // move the player (horizontal first, then vertical)
             GlobalScope.launch {
                 moveUser(position)
@@ -75,6 +83,12 @@ class MainActivity : Activity() {
         val yIndexOld = floor((lastPosition / 5).toDouble()).toInt()
         val yIndexNew = floor((position / 5).toDouble()).toInt()
 
+        fun checkTreasure() {
+            if (tiles[lastPosition] == "X") {
+                updateScore()
+            }
+        }
+
         suspend fun moveY() {
             when {
                 yIndexOld < yIndexNew -> {
@@ -82,10 +96,12 @@ class MainActivity : Activity() {
                         delay(1000L)
                         tiles[lastPosition] = " "
                         lastPosition += 5
+                        checkTreasure()
                         tiles[lastPosition] = "O"
                         this.runOnUiThread {
                             (gridView.adapter as ArrayAdapter<*>).notifyDataSetChanged()
                         }
+                        updateCell()
                     }
                 }
                 yIndexOld > yIndexNew -> {
@@ -93,10 +109,12 @@ class MainActivity : Activity() {
                         delay(1000L)
                         tiles[lastPosition] = " "
                         lastPosition -= 5
+                        checkTreasure()
                         tiles[lastPosition] = "O"
                         this.runOnUiThread {
                             (gridView.adapter as ArrayAdapter<*>).notifyDataSetChanged()
                         }
+                        updateCell()
                     }
                 }
             }
@@ -107,10 +125,13 @@ class MainActivity : Activity() {
                 for (x in xIndexOld until xIndexNew) {
                     delay(1000L)
                     tiles[lastPosition] = " "
-                    tiles[++lastPosition] = "O"
+                    lastPosition++
+                    checkTreasure()
+                    tiles[lastPosition] = "O"
                     this.runOnUiThread {
                         (gridView.adapter as ArrayAdapter<*>).notifyDataSetChanged()
                     }
+                    updateCell()
                 }
                 moveY()
             }
@@ -118,10 +139,13 @@ class MainActivity : Activity() {
                 for (x in xIndexNew until xIndexOld) {
                     delay(1000L)
                     tiles[lastPosition] = " "
-                    tiles[--lastPosition] = "O"
+                    lastPosition--
+                    checkTreasure()
+                    tiles[lastPosition] = "O"
                     this.runOnUiThread {
                         (gridView.adapter as ArrayAdapter<*>).notifyDataSetChanged()
                     }
+                    updateCell()
                 }
                 moveY()
             }
@@ -131,12 +155,28 @@ class MainActivity : Activity() {
         }
     }
 
-    private suspend fun updateCell() {
-        // TODO
+    private fun updateCell(reset: Boolean = false) {
+        val textCell = findViewById<TextView>(R.id.textCell)
+        if (reset) {
+            cellCount = 0
+        } else {
+            cellCount++
+        }
+        this.runOnUiThread {
+            textCell.text = "$cellCount Cells"
+        }
     }
 
-    private suspend fun updateScore() {
-        // TODO
+    private fun updateScore(reset: Boolean = false) {
+        val textTreasure = findViewById<TextView>(R.id.textTreasure)
+        if (reset) {
+            treasureCount = 0;
+        } else {
+            treasureCount++
+        }
+        this.runOnUiThread {
+            textTreasure.text = "$treasureCount Treasures"
+        }
     }
 
     fun reset(view: View?) {
@@ -152,6 +192,8 @@ class MainActivity : Activity() {
         tiles[cury * w + curx] = "O"
         (gridView.adapter as ArrayAdapter<*>).notifyDataSetChanged()
         lastPosition = cury * w + curx
+        updateCell(true)
+        updateScore(true)
     }
 
     companion object {
